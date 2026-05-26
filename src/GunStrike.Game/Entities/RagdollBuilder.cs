@@ -139,6 +139,7 @@ public static class RagdollBuilder
         var body = pw.CreateDynamicBox(pos, w, h, density: 1f, restitution: 0f, friction: 0.4f);
         body.LinearDamping  = GameConstants.RagdollLinearDamping;
         body.AngularDamping = GameConstants.RagdollAngularDamping;
+        body.Tag = "player";   // used by projectile collision detection
         return new BodyPart(id, body, w, h, c);
     }
 

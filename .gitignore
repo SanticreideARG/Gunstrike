@@ -21,6 +21,12 @@ Thumbs.db
 # Scratch / temp folders
 Scav/
 
+# Runtime artifacts
+*.png
+*.log
+run_out.txt
+run_err.txt
+
 # Logs
 debug.log
 *.log

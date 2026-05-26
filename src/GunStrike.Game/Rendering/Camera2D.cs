@@ -14,12 +14,13 @@ public class GameCamera
     private Vector2 _target;
     private const float Smoothing = 8f;   // higher = snappier
 
-    public GameCamera()
+    public GameCamera(Vector2 initialWorldPx = default)
     {
+        _target = initialWorldPx;
         RaylibCamera = new Raylib_cs.Camera2D
         {
             Offset = new Vector2(GameConstants.ScreenWidth / 2f, GameConstants.ScreenHeight / 2f),
-            Target = Vector2.Zero,
+            Target = initialWorldPx,
             Rotation = 0f,
             Zoom = 1f
         };

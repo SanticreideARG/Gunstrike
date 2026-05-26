@@ -22,9 +22,37 @@ public class PlayerEntity
 
     private bool  _onGround;
     private float _aimAngle;   // radians from +X
+    private bool  _facingRight = true;
 
     public bool    IsRagdoll     { get; private set; }
+
+    /// <summary>Torso center in pixels (world space).</summary>
     public Vector2 PixelPosition => _parts[BodyPartId.Torso].PixelPosition;
+
+    /// <summary>Torso center in meters (physics space).</summary>
+    public Vector2 TorsoMeters
+    {
+        get { var b = _parts[BodyPartId.Torso].Body; return new Vector2(b.Position.X, b.Position.Y); }
+    }
+
+    /// <summary>
+    /// Muzzle position in meters — tip of the front hand, offset along aim direction.
+    /// Used as bullet spawn origin.
+    /// </summary>
+    public Vector2 MuzzleMeters
+    {
+        get
+        {
+            var tp = TorsoMeters;
+            // Offset: half torso width + arm length (~0.51m) in aim direction
+            float reach = 0.28f / 2f + 0.27f + 0.24f + 0.05f;
+            return tp + new Vector2(MathF.Cos(_aimAngle), MathF.Sin(_aimAngle)) * reach;
+        }
+    }
+
+    /// <summary>Normalized aim direction vector.</summary>
+    public Vector2 AimDirection =>
+        new(MathF.Cos(_aimAngle), MathF.Sin(_aimAngle));
 
     private readonly Vector2 _spawnPos;
 
@@ -60,8 +88,8 @@ public class PlayerEntity
         var vel   = torso.LinearVelocity;
 
         float vx = 0f;
-        if (input.MoveLeft)  vx = -GameConstants.PlayerMoveSpeed;
-        if (input.MoveRight) vx =  GameConstants.PlayerMoveSpeed;
+        if (input.MoveLeft)  { vx = -GameConstants.PlayerMoveSpeed; _facingRight = false; }
+        if (input.MoveRight) { vx =  GameConstants.PlayerMoveSpeed; _facingRight = true;  }
 
         torso.LinearVelocity = new AetherVec2(vx, vel.Y);
 
@@ -102,9 +130,9 @@ public class PlayerEntity
 
     private void UpdateAim(InputState input)
     {
-        var dir = input.MouseScreenPos - PixelPosition;
-        if (dir.LengthSquared() > 0.01f)
-            _aimAngle = MathF.Atan2(dir.Y, dir.X);
+        // AimDirection is pre-computed in world space by GameLoop
+        if (input.AimDirection.LengthSquared() > 0.001f)
+            _aimAngle = MathF.Atan2(input.AimDirection.Y, input.AimDirection.X);
     }
 
     private void UpdateGroundDetection()
