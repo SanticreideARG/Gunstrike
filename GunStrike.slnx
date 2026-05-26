@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GunStrike.Game/GunStrike.Game.csproj" />
+  </Folder>
+</Solution>

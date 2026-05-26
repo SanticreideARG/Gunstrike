@@ -1,0 +1,33 @@
+# Build outputs
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# .NET
+*.dll
+*.pdb
+*.cache
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Scratch / temp folders
+Scav/
+
+# Logs
+debug.log
+*.log
+
+# NuGet
+*.nupkg
+project.assets.json
+project.nuget.cache
+*.nuget.props
+*.nuget.targets
