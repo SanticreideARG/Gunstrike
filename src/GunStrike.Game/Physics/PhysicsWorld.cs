@@ -74,4 +74,16 @@ public class PhysicsWorld
         fix.Friction    = friction;
         return body;
     }
+
+    /// <summary>Returns true if any STATIC fixture lies between from and to (meters).</summary>
+    public bool RayCastStatic(SysVec2 from, SysVec2 to)
+    {
+        bool hit = false;
+        World.RayCast((fixture, point, normal, fraction) =>
+        {
+            if (fixture.Body.BodyType == BodyType.Static) { hit = true; return 0f; }
+            return fraction;
+        }, ToAether(from), ToAether(to));
+        return hit;
+    }
 }

@@ -1,5 +1,6 @@
 using System.Numerics;
 using Raylib_cs;
+using nkast.Aether.Physics2D.Dynamics;
 using GunStrike.Core;
 using GunStrike.Physics;
 
@@ -23,6 +24,9 @@ public class ProjectileManager
     // Fire-rate limiter
     private float _cooldown;
     private const float FireRate = 0.12f;   // seconds between shots
+
+    /// <summary>Fired when a bullet hits an enemy body. Args: hitBody, hitPointMeters, damage.</summary>
+    public event Action<Body, Vector2, float>? OnEnemyHit;
 
     public int ActiveCount => _active.Count;
 
@@ -70,6 +74,9 @@ public class ProjectileManager
 
             if (p.HitPlayer)
                 ResolvePlayerHit(p);
+
+            if (p.HitEnemy && p.HitEnemyBody is not null)
+                OnEnemyHit?.Invoke(p.HitEnemyBody, p.HitPointMeters, p.Damage);
 
             p.Destroy(_pw);
             _active.RemoveAt(i);

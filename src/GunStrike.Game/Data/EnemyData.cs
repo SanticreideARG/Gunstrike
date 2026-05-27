@@ -45,6 +45,8 @@ public class EnemyStats
     public int   ScoreValue     { get; set; } = 100;
     /// <summary>Chance to drop pickup (0..1).</summary>
     public float DropChance     { get; set; } = 0.2f;
+    /// <summary>Damage dealt per hitscan attack.</summary>
+    public float AttackDamage   { get; set; } = 20f;
 }
 
 // ── Enemy ─────────────────────────────────────────────────────────────────────

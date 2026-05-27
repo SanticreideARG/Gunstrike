@@ -35,6 +35,9 @@ public class Projectile
     public  bool    HitPlayer      { get; private set; }
     public  Body?   HitPlayerBody  { get; private set; }
     public  Vector2 HitPointMeters { get; private set; }
+    public  bool    HitEnemy       { get; private set; }
+    public  Body?   HitEnemyBody   { get; private set; }
+    public  float   Damage         => GameConstants.BulletDamage;
     private bool    _hitSomething;
 
     // ── Rendering trail ──────────────────────────────────────────────────────────
@@ -120,6 +123,12 @@ public class Projectile
             HitPlayerBody = other.Body;
             HitPointMeters = new Vector2(Body.Position.X, Body.Position.Y);
         }
+        else if (other.Body.Tag is "enemy")
+        {
+            HitEnemy     = true;
+            HitEnemyBody = other.Body;
+            HitPointMeters = new Vector2(Body.Position.X, Body.Position.Y);
+        }
 
         return true;
     }
@@ -141,5 +150,6 @@ public static class PhysicsCategories
         All    = nkast.Aether.Physics2D.Dynamics.Category.All,
         Bullet = nkast.Aether.Physics2D.Dynamics.Category.Cat2,
         Player = nkast.Aether.Physics2D.Dynamics.Category.Cat3,
-        World  = nkast.Aether.Physics2D.Dynamics.Category.Cat4;
+        World  = nkast.Aether.Physics2D.Dynamics.Category.Cat4,
+        Enemy  = nkast.Aether.Physics2D.Dynamics.Category.Cat5;
 }

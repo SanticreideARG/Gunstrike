@@ -43,6 +43,8 @@ public static class GameConstants
     // ── Projectiles ─────────────────────────────────────────────────────────────
     public const float BulletSpeed    = 60f;    // m/s
     public const float BulletLifespan = 3f;     // seconds
+    public const float BulletDamage   = 25f;
+    public const float PlayerMaxHealth = 100f;
 
     // ── Parallax scroll factors ─────────────────────────────────────────────────
     // Layer 3 (map)        = 1.00  →  moves 1:1 with camera (normal)

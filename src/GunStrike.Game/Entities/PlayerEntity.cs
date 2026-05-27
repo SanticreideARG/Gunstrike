@@ -25,6 +25,11 @@ public class PlayerEntity : IDisposable
     private bool  _onGround;
     private float _aimAngle;   // radians from +X
     private bool  _facingRight = true;
+    private float _walkPhase;
+
+    public float Health    { get; private set; } = GameConstants.PlayerMaxHealth;
+    public float MaxHealth => GameConstants.PlayerMaxHealth;
+    public bool  IsAlive   => Health > 0f;
 
     // ── Reload animation ──────────────────────────────────────────────────────
     public  bool  IsReloading   { get; private set; }
@@ -99,7 +104,7 @@ public class PlayerEntity : IDisposable
         UpdateGroundDetection();
 
         if (!IsRagdoll)
-            UpdateActive(input);
+            UpdateActive(dt, input);
 
         if (IsReloading)
             UpdateReload(dt, input);   // drives _aimAngle; also tracks mouse for phase 3
@@ -107,7 +112,7 @@ public class PlayerEntity : IDisposable
             UpdateAim(input);          // normal mouse tracking
     }
 
-    private void UpdateActive(InputState input)
+    private void UpdateActive(float dt, InputState input)
     {
         var torso = _parts[BodyPartId.Torso].Body;
         var vel   = torso.LinearVelocity;
@@ -126,6 +131,13 @@ public class PlayerEntity : IDisposable
             torso.LinearVelocity = new AetherVec2(torso.LinearVelocity.X, GameConstants.PlayerMaxFallSpeed);
 
         SyncLimbsToTorso();
+
+        // Walk cycle phase — drives leg animation
+        float walkVx = torso.LinearVelocity.X;
+        if (MathF.Abs(walkVx) > 0.2f)
+            _walkPhase += dt * MathF.Abs(walkVx) * 3.4f;
+        else
+            _walkPhase = float.Lerp(_walkPhase, 0f, dt * 14f);
     }
 
     private void SyncLimbsToTorso()
@@ -242,8 +254,10 @@ public class PlayerEntity : IDisposable
 
     private void UpdateGroundDetection()
     {
-        // Simple velocity heuristic — will be replaced by contact listener
-        _onGround = MathF.Abs(_parts[BodyPartId.Torso].Body.LinearVelocity.Y) < 0.5f;
+        var torso  = _parts[BodyPartId.Torso].Body;
+        var feetM  = new Vector2(torso.Position.X, torso.Position.Y + 0.50f);
+        var belowM = new Vector2(torso.Position.X, torso.Position.Y + 0.70f);
+        _onGround  = _pw.RayCastStatic(feetM, belowM);
     }
 
     // ── Ragdoll ──────────────────────────────────────────────────────────────────
@@ -280,6 +294,13 @@ public class PlayerEntity : IDisposable
             p.Body.AngularVelocity = 0f;
             p.Body.Rotation        = 0f;
         }
+    }
+
+    public void TakeDamage(float dmg)
+    {
+        if (!IsAlive) return;
+        Health = Math.Max(0f, Health - dmg);
+        if (Health <= 0f && !IsRagdoll) ToggleRagdoll();
     }
 
     /// <summary>Apply ballistic impact — forces ragdoll on the nearest body part.</summary>
@@ -325,7 +346,8 @@ public class PlayerEntity : IDisposable
         // Flip: face the direction we're aiming at (left vs right half)
         bool faceRight = _aimAngle is > -MathF.PI / 2f and < MathF.PI / 2f;
 
-        _renderer.Draw(positions, rotations, aimDeg, faceRight, IsRagdoll);
+        float walkP = (IsReloading || IsRagdoll) ? 0f : _walkPhase;
+        _renderer.Draw(positions, rotations, aimDeg, faceRight, IsRagdoll, walkP);
     }
 
     public void Unload() { }

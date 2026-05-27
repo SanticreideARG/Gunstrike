@@ -16,6 +16,7 @@ public class GameLoop
     private readonly LevelRenderer     _level;
     private readonly ParallaxSystem    _parallax;
     private readonly ProjectileManager _projectiles;
+    private readonly EnemyManager      _enemies;
 
     public GameLoop()
     {
@@ -30,6 +31,7 @@ public class GameLoop
         _camera      = new GameCamera(spawnPixels);
         _player      = new PlayerEntity(_physics, spawnMeters);
         _projectiles = new ProjectileManager(_physics, _player);
+        _enemies     = new EnemyManager(_physics);
     }
 
     public void Run()
@@ -64,6 +66,37 @@ public class GameLoop
     {
         _level.Load();
         _player.Load();
+
+        // Spawn a few test enemies at hardcoded positions
+        var grunt = new GunStrike.Data.EnemyData { Name = "Grunt", Class = GunStrike.Data.EnemyClass.Grunt };
+        grunt.AI.SightRange     = 12f;
+        grunt.AI.AttackRange    =  6f;
+        grunt.AI.WalkSpeed      =  2.5f;
+        grunt.AI.RunSpeed       =  5f;
+        grunt.AI.ReactionTime   =  0.4f;
+        grunt.AI.Inaccuracy     =  0.35f;
+        grunt.AI.AttackInterval =  1.2f;
+
+        _enemies.Spawn(grunt, new Vector2(15f, 13.0f), patrolRange: 3f);
+        _enemies.Spawn(grunt, new Vector2(25f, 13.0f), patrolRange: 4f);
+
+        var heavy = new GunStrike.Data.EnemyData { Name = "Heavy", Class = GunStrike.Data.EnemyClass.Heavy };
+        heavy.AI.SightRange      =  8f;
+        heavy.AI.AttackRange     =  4f;
+        heavy.AI.WalkSpeed       =  1.5f;
+        heavy.AI.RunSpeed        =  3f;
+        heavy.AI.ReactionTime    =  0.6f;
+        heavy.AI.Inaccuracy      =  0.2f;
+        heavy.AI.AttackInterval  =  0.8f;
+        heavy.Stats.MaxHealth    = 200f;
+        heavy.Stats.AttackDamage =  40f;
+
+        _enemies.Spawn(heavy, new Vector2(30f, 13.0f), patrolRange: 2f);
+
+        // Connect bullet → enemy hits
+        _projectiles.OnEnemyHit += (body, pt, dmg) => _enemies.ApplyBulletHit(body, pt, dmg);
+        // Connect enemy hitscan → player damage
+        _enemies.OnPlayerHit += dmg => _player.TakeDamage(dmg);
     }
 
     private void Update(float dt)
@@ -84,6 +117,7 @@ public class GameLoop
         _projectiles.Update(dt);
         _physics.Step(dt);
         _camera.Follow(_player.PixelPosition);
+        _enemies.Update(dt, _player.TorsoMeters, _player.IsAlive);
 
         // ── Shoot ────────────────────────────────────────────────────────────────
         if (input.Shoot && !_player.IsRagdoll && !_player.IsReloading)
@@ -104,6 +138,7 @@ public class GameLoop
             _level.Draw();
             _projectiles.Draw();
             _player.Draw();
+            _enemies.Draw();
 
         Raylib.EndMode2D();
 
@@ -154,6 +189,23 @@ public class GameLoop
             // Border
             Raylib.DrawRectangleLines(bx, by, barW, barH, new Color(200, 200, 200, 180));
         }
+
+        // Health bar
+        float hpFrac = Math.Clamp(_player.Health / _player.MaxHealth, 0f, 1f);
+        int hbX = 10, hbY = GameConstants.ScreenHeight - 48;
+        int hbW = 160, hbH = 12;
+        Raylib.DrawRectangle(hbX, hbY, hbW, hbH, new Color(40, 20, 20, 200));
+        Raylib.DrawRectangle(hbX, hbY, (int)(hbW * hpFrac), hbH,
+            hpFrac > 0.5f ? new Color(50, 200, 80, 255)
+            : hpFrac > 0.25f ? new Color(200, 180, 50, 255)
+            : new Color(200, 50, 50, 255));
+        Raylib.DrawRectangleLines(hbX, hbY, hbW, hbH, new Color(180, 180, 180, 160));
+        Raylib.DrawText($"HP  {(int)_player.Health}", hbX + hbW + 8, hbY + (hbH - 13) / 2, 13,
+            new Color(200, 200, 200, 200));
+
+        // Enemy count
+        Raylib.DrawText($"Enemies: {_enemies.AliveCount}/{_enemies.TotalCount}",
+            10, hbY - 18, 13, new Color(200, 200, 200, 200));
 
         // Control hints
         string hint = _player.IsReloading

@@ -140,6 +140,13 @@ public static class RagdollBuilder
         body.LinearDamping  = GameConstants.RagdollLinearDamping;
         body.AngularDamping = GameConstants.RagdollAngularDamping;
         body.Tag = "player";   // used by projectile collision detection
+        // Player parts are Cat3; they don't physically interact with Cat5 (enemies)
+        foreach (var fix in body.FixtureList)
+        {
+            fix.CollisionCategories = PhysicsCategories.Player;
+            fix.CollidesWith = nkast.Aether.Physics2D.Dynamics.Category.All
+                             ^ PhysicsCategories.Enemy;
+        }
         return new BodyPart(id, body, w, h, c);
     }
 

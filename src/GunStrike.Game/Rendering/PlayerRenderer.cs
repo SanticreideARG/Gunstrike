@@ -54,7 +54,8 @@ public class PlayerRenderer : IDisposable
         Dictionary<BodyPartId, float>   partRotations,
         float  aimAngleDeg,
         bool   facingRight,
-        bool   isRagdoll)
+        bool   isRagdoll,
+        float  walkPhase = 0f)
     {
         foreach (var id in DrawOrder)
         {
@@ -71,7 +72,7 @@ public class PlayerRenderer : IDisposable
             }
             else
             {
-                angleDeg = GetActiveAngle(id, rot, aimAngleDeg, facingRight);
+                angleDeg = GetActiveAngle(id, rot, aimAngleDeg, facingRight, walkPhase);
             }
 
             sprite.Draw(pos, angleDeg, facingRight);
@@ -83,29 +84,28 @@ public class PlayerRenderer : IDisposable
     /// Lower body parts stay upright; upper body follows aim.
     /// </summary>
     private static float GetActiveAngle(BodyPartId id, float physicsRot,
-                                         float aimDeg, bool facingRight)
+                                         float aimDeg, bool facingRight, float walkPhase)
     {
         return id switch
         {
-            // Legs stay vertical (physics keeps them upright in active mode)
-            BodyPartId.UpperLegR or BodyPartId.UpperLegL
-                or BodyPartId.LowerLegR or BodyPartId.LowerLegL => 0f,
-
-            // Torso tilts slightly toward aim (10% of aim angle)
+            // Legs: sinusoidal walk cycle
+            BodyPartId.UpperLegR =>  MathF.Sin(walkPhase) * 28f,
+            BodyPartId.UpperLegL => -MathF.Sin(walkPhase) * 28f,
+            // Lower leg bends on backstroke (phase-lagged, only bends backward)
+            BodyPartId.LowerLegR => MathF.Max(0f, -MathF.Sin(walkPhase - 0.5f)) * 38f,
+            BodyPartId.LowerLegL => MathF.Max(0f,  MathF.Sin(walkPhase - 0.5f)) * 38f,
+            // Torso slight aim lean
             BodyPartId.Torso => aimDeg * 0.08f,
-
-            // Head: slight aim tilt
+            // Head
             BodyPartId.Head  => aimDeg * 0.05f,
-
-            // Front arm (weapon arm = R): full aim angle
+            // Front arm: full aim angle
             BodyPartId.UpperArmR or BodyPartId.LowerArmR
                 => facingRight ? aimDeg : 180f - aimDeg,
-
-            // Back arm (L): slight counter-rotation for balance
+            // Back arm: aim-weighted + counter-swing with walk
             BodyPartId.UpperArmL or BodyPartId.LowerArmL
-                => facingRight ? aimDeg * 0.3f + 20f
-                               : -(aimDeg * 0.3f + 20f),
-
+                => facingRight
+                   ? aimDeg * 0.3f + MathF.Sin(walkPhase) * 18f + 20f
+                   : -(aimDeg * 0.3f + MathF.Sin(walkPhase) * 18f + 20f),
             _ => 0f
         };
     }
