@@ -6,6 +6,7 @@ using AetherVec2 = nkast.Aether.Physics2D.Common.Vector2;
 using GunStrike.Core;
 using GunStrike.Input;
 using GunStrike.Physics;
+using GunStrike.Rendering;
 
 namespace GunStrike.Entities;
 
@@ -14,9 +15,10 @@ namespace GunStrike.Entities;
 /// ACTIVE mode: torso is Dynamic, limbs are Kinematic (follow torso rigidly).
 /// RAGDOLL mode: all bodies Dynamic, joints free — physics takes over.
 /// </summary>
-public class PlayerEntity
+public class PlayerEntity : IDisposable
 {
     private readonly PhysicsWorld _pw;
+    private PlayerRenderer _renderer = null!;
     private Dictionary<BodyPartId, BodyPart> _parts = [];
     private List<RevoluteJoint> _joints = [];
 
@@ -64,6 +66,8 @@ public class PlayerEntity
 
     public void Load()
     {
+        // Sprites require an active OpenGL context (called after InitWindow)
+        _renderer = new PlayerRenderer();
         (_parts, _joints) = RagdollBuilder.Build(_pw, _spawnPos);
         SetActiveMode();
     }
@@ -204,30 +208,25 @@ public class PlayerEntity
 
     public void Draw()
     {
-        // Back-to-front Z order (left limbs behind, right limbs in front)
-        BodyPartId[] order =
-        [
-            BodyPartId.LowerLegL, BodyPartId.UpperLegL,
-            BodyPartId.LowerArmL, BodyPartId.UpperArmL,
-            BodyPartId.Torso,
-            BodyPartId.Head,
-            BodyPartId.UpperLegR, BodyPartId.LowerLegR,
-            BodyPartId.UpperArmR, BodyPartId.LowerArmR,
-        ];
+        // Collect world-pixel positions and physics rotations for each part
+        var positions  = new Dictionary<BodyPartId, Vector2>();
+        var rotations  = new Dictionary<BodyPartId, float>();
 
-        foreach (var id in order)
-            _parts[id].Draw();
+        foreach (var (id, part) in _parts)
+        {
+            positions[id] = part.PixelPosition;
+            rotations[id] = part.Rotation;
+        }
 
-        DrawAimLine();
-    }
+        float aimDeg = _aimAngle * (180f / MathF.PI);
 
-    private void DrawAimLine()
-    {
-        var origin = PixelPosition;
-        var tip    = origin + new Vector2(MathF.Cos(_aimAngle), MathF.Sin(_aimAngle)) * 80f;
-        Raylib.DrawLineEx(origin, tip, 2f, new Color(255, 200, 50, 200));
-        Raylib.DrawCircleV(tip, 4f, Color.Yellow);
+        // Flip: face the direction we're aiming at (left vs right half)
+        bool faceRight = _aimAngle is > -MathF.PI / 2f and < MathF.PI / 2f;
+
+        _renderer.Draw(positions, rotations, aimDeg, faceRight, IsRagdoll);
     }
 
     public void Unload() { }
+
+    public void Dispose() => _renderer.Dispose();
 }
