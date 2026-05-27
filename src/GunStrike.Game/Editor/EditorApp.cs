@@ -1,5 +1,6 @@
 using System.Numerics;
 using GunStrike.Data;
+using GunStrike.Editor.Map;
 using GunStrike.Editor.UI;
 using Raylib_cs;
 
@@ -12,8 +13,8 @@ namespace GunStrike.Editor;
 public class EditorApp
 {
     // ── Window ────────────────────────────────────────────────────────────────
-    private const int WinW = 1280;
-    private const int WinH = 720;
+    private const int WinW   = 1280;
+    private const int WinH   = 720;
     private const int PanelW = 280;
 
     // ── Mode ──────────────────────────────────────────────────────────────────
@@ -27,6 +28,9 @@ public class EditorApp
     // ── UI Panels ─────────────────────────────────────────────────────────────
     private Panel _sidePanel = null!;
     private Panel _modeBar   = null!;
+
+    // ── Map canvas ────────────────────────────────────────────────────────────
+    private MapCanvas _mapCanvas = null!;
 
     // ── Status bar ────────────────────────────────────────────────────────────
     private string _statusMsg  = "Ready.";
@@ -48,6 +52,7 @@ public class EditorApp
         Raylib.InitWindow(WinW, WinH, $"GunStrike Editor — {_mode}");
         Raylib.SetTargetFPS(60);
 
+        _mapCanvas = new MapCanvas(_map);
         BuildPanels();
 
         while (!Raylib.WindowShouldClose())
@@ -99,9 +104,7 @@ public class EditorApp
         _                 => "Editor"
     };
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Populate the side panel with controls for the active mode
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Populate side panel ───────────────────────────────────────────────────
 
     private void PopulateSidePanel()
     {
@@ -115,7 +118,6 @@ public class EditorApp
         _sidePanel.AddSpacer(8f);
         _sidePanel.AddSeparator();
 
-        // Save / Load buttons
         var saveBtn = _sidePanel.Add(new Button("💾  Save", () => SaveCurrent()));
         saveBtn.Style = ButtonStyle.Normal;
 
@@ -138,20 +140,40 @@ public class EditorApp
         _sidePanel.Add(new RadioGroup(
             ["Mountains", "Dunes", "Urban"],
             (int)_map.Environment,
-            i => _map.Environment = (MapEnvironment)i));
+            i => { _map.Environment = (MapEnvironment)i; }));
 
         _sidePanel.AddSeparator("Size");
-        var wSlider = _sidePanel.Add(new Slider("Width (tiles)", 20, 200, _map.WidthTiles,
+        _sidePanel.Add(new Slider("Width (tiles)", 20, 200, _map.WidthTiles,
             v => _map.WidthTiles = (int)v) { Format = "F0" });
-        var hSlider = _sidePanel.Add(new Slider("Height (tiles)", 10, 60,  _map.HeightTiles,
+        _sidePanel.Add(new Slider("Height (tiles)", 10, 60, _map.HeightTiles,
             v => _map.HeightTiles = (int)v) { Format = "F0" });
-        var tsSlider = _sidePanel.Add(new Slider("Tile size (px)", 16, 64, _map.TileSize,
+        _sidePanel.Add(new Slider("Tile size (px)", 16, 64, _map.TileSize,
             v => _map.TileSize = (int)v) { Format = "F0" });
 
-        _sidePanel.AddSeparator("Info");
-        _sidePanel.Add(new Label($"Tiles: {_map.Tiles.Count}", LabelStyle.Secondary));
-        _sidePanel.Add(new Label($"Spawns: {_map.Spawns.Count}", LabelStyle.Secondary));
+        _sidePanel.AddSeparator("Canvas");
+        _sidePanel.Add(new Button("⌂  Fit view", () =>
+        {
+            _mapCanvas.FitToWindow(CanvasRect());
+        })) .Style = ButtonStyle.Ghost;
+
+        _sidePanel.AddSeparator("Legend");
+        AddTileLegend();
+
+        _sidePanel.AddSeparator("Stats");
+        _sidePanel.Add(new Label($"Tiles: {_map.Tiles.Count}",     LabelStyle.Secondary));
+        _sidePanel.Add(new Label($"Spawns: {_map.Spawns.Count}",   LabelStyle.Secondary));
         _sidePanel.Add(new Label($"Enemies: {_map.Enemies.Count}", LabelStyle.Secondary));
+    }
+
+    private void AddTileLegend()
+    {
+        var types = new[] { TileType.Solid, TileType.Platform, TileType.Ladder,
+                            TileType.Spike, TileType.Water };
+        foreach (var t in types)
+        {
+            var row = new Label($"■  {t}", LabelStyle.Secondary);
+            _sidePanel.Add(row);
+        }
     }
 
     // ── Weapon panel ──────────────────────────────────────────────────────────
@@ -181,7 +203,8 @@ public class EditorApp
             v => _weapon.Spread = v));
         _sidePanel.Add(new Slider("Mag Size",      1f,  100f,  _weapon.MagSize,
             v => _weapon.MagSize = (int)v) { Format = "F0" });
-        _sidePanel.Add(new Slider("Reload (s)",   0.3f,  5f,  _weapon.ReloadTime));
+        _sidePanel.Add(new Slider("Reload (s)",   0.3f,  5f,  _weapon.ReloadTime,
+            v => _weapon.ReloadTime = v));
 
         _sidePanel.AddSeparator("Projectile");
         _sidePanel.Add(new Slider("Speed (m/s)",  10f, 120f,  _weapon.Projectile.Speed,
@@ -217,12 +240,13 @@ public class EditorApp
             i => _enemy.Class = (EnemyClass)i));
 
         _sidePanel.AddSeparator("Stats");
-        _sidePanel.Add(new Slider("Health",       20f, 500f, _enemy.Stats.MaxHealth,
+        _sidePanel.Add(new Slider("Health",    20f,  500f, _enemy.Stats.MaxHealth,
             v => _enemy.Stats.MaxHealth = v) { Format = "F0" });
-        _sidePanel.Add(new Slider("Armor",         0f, 100f, _enemy.Stats.Armor,
+        _sidePanel.Add(new Slider("Armor",      0f,  100f, _enemy.Stats.Armor,
             v => _enemy.Stats.Armor = v));
-        _sidePanel.Add(new Slider("Mass Mult",    0.5f,  4f, _enemy.Stats.MassMult));
-        _sidePanel.Add(new Slider("Score",          0f, 2000f, _enemy.Stats.ScoreValue,
+        _sidePanel.Add(new Slider("Mass Mult", 0.5f,   4f, _enemy.Stats.MassMult,
+            v => _enemy.Stats.MassMult = v));
+        _sidePanel.Add(new Slider("Score",      0f, 2000f, _enemy.Stats.ScoreValue,
             v => _enemy.Stats.ScoreValue = (int)v) { Format = "F0" });
 
         _sidePanel.AddSeparator("AI");
@@ -239,24 +263,38 @@ public class EditorApp
             v => _enemy.AI.WalkSpeed = v));
         _sidePanel.Add(new Slider("Run (m/s)",    2f, 12f, _enemy.AI.RunSpeed,
             v => _enemy.AI.RunSpeed = v));
-        _sidePanel.Add(new Slider("Inaccuracy",   0f,  1f, _enemy.AI.Inaccuracy));
+        _sidePanel.Add(new Slider("Inaccuracy",   0f,  1f, _enemy.AI.Inaccuracy,
+            v => _enemy.AI.Inaccuracy = v));
     }
 
     // ── Update ────────────────────────────────────────────────────────────────
 
     private void Update()
     {
-        // Resize side panel to match window height
         int scrH = Raylib.GetScreenHeight();
         _sidePanel.Bounds = _sidePanel.Bounds with { Height = scrH - 64 - 24 };
 
-        var mouse    = Raylib.GetMousePosition();
-        bool clicked  = Raylib.IsMouseButtonPressed(MouseButton.Left);
-        bool held     = Raylib.IsMouseButtonDown(MouseButton.Left);
-        bool released = Raylib.IsMouseButtonReleased(MouseButton.Left);
+        var mouse = Raylib.GetMousePosition();
 
-        _modeBar.Update(mouse, clicked, held, released);
-        _sidePanel.Update(mouse, clicked, held, released);
+        bool lmbPressed  = Raylib.IsMouseButtonPressed(MouseButton.Left);
+        bool lmbDown     = Raylib.IsMouseButtonDown(MouseButton.Left);
+        bool lmbReleased = Raylib.IsMouseButtonReleased(MouseButton.Left);
+        bool rmbDown     = Raylib.IsMouseButtonDown(MouseButton.Right);
+        bool mmbPressed  = Raylib.IsMouseButtonPressed(MouseButton.Middle);
+        bool mmbDown     = Raylib.IsMouseButtonDown(MouseButton.Middle);
+
+        // Side panels
+        _modeBar.Update(mouse, lmbPressed, lmbDown, lmbReleased);
+        _sidePanel.Update(mouse, lmbPressed, lmbDown, lmbReleased);
+
+        // Map canvas (only in map mode)
+        if (_mode == EditorMode.Map)
+        {
+            _mapCanvas.Update(CanvasRect(), mouse,
+                lmbDown, lmbPressed,
+                rmbDown,
+                mmbDown, mmbPressed);
+        }
 
         // Status fade
         if (Raylib.GetTime() - _statusTime > 4.0)
@@ -270,14 +308,11 @@ public class EditorApp
         Raylib.BeginDrawing();
         Raylib.ClearBackground(UITheme.WindowBg);
 
-        // Canvas area (right of side panel)
         DrawCanvas();
 
-        // Panels (drawn on top)
         _modeBar.Draw();
         _sidePanel.Draw();
 
-        // Status bar
         DrawStatusBar();
 
         Raylib.EndDrawing();
@@ -285,39 +320,49 @@ public class EditorApp
 
     private void DrawCanvas()
     {
-        int scrW = Raylib.GetScreenWidth();
-        int scrH = Raylib.GetScreenHeight();
-        int canvasX = PanelW + 2;
-        int canvasW = scrW - canvasX;
-
-        // Dark canvas background
-        Raylib.DrawRectangle(canvasX, 0, canvasW, scrH - 24, new Color(18, 20, 30, 255));
-
-        // Placeholder text
-        string hint = _mode switch
-        {
-            EditorMode.Map    => "Map canvas — tile placement coming in Phase 2",
-            EditorMode.Weapon => "Weapon preview — sprite + stats coming in Phase 3",
-            EditorMode.Enemy  => "Enemy preview — AI visualizer coming in Phase 4",
-            _                 => ""
-        };
-
-        int tw = Raylib.MeasureText(hint, UITheme.FontSizeNormal);
-        Raylib.DrawText(hint,
-            canvasX + (canvasW - tw) / 2,
-            scrH / 2 - UITheme.FontSizeNormal,
-            UITheme.FontSizeNormal,
-            new Color(60, 65, 90, 255));
-
-        // Mode label
-        string modeLabel = _mode.ToString().ToUpper() + " EDITOR";
-        Raylib.DrawText(modeLabel,
-            canvasX + 12, 12,
-            UITheme.FontSizeMedium,
-            UITheme.LabelAccent);
+        int scrW    = Raylib.GetScreenWidth();
+        int scrH    = Raylib.GetScreenHeight();
+        var canvas  = CanvasRect();
 
         // Divider
-        Raylib.DrawLine(canvasX, 0, canvasX, scrH - 24, UITheme.PanelBorder);
+        Raylib.DrawLine((int)canvas.X - 2, 0, (int)canvas.X - 2, scrH - 24, UITheme.PanelBorder);
+
+        if (_mode == EditorMode.Map)
+        {
+            _mapCanvas.Draw(canvas);
+
+            // Mode label (top-right corner, above the canvas toolbar)
+            string modeLabel = "MAP EDITOR";
+            int    mlw       = Raylib.MeasureText(modeLabel, UITheme.FontSizeSmall);
+            Raylib.DrawText(modeLabel,
+                (int)(canvas.X + canvas.Width - mlw - 10),
+                6,
+                UITheme.FontSizeSmall,
+                new Color(55, 60, 85, 255));
+        }
+        else
+        {
+            // Placeholder for Weapon / Enemy editors
+            Raylib.DrawRectangleRec(canvas, new Color(18, 20, 30, 255));
+
+            string hint = _mode switch
+            {
+                EditorMode.Weapon => "Weapon preview — sprite + stat display · Phase 3",
+                EditorMode.Enemy  => "Enemy preview — AI state visualizer · Phase 4",
+                _                 => ""
+            };
+            int tw = Raylib.MeasureText(hint, UITheme.FontSizeNormal);
+            Raylib.DrawText(hint,
+                (int)(canvas.X + (canvas.Width - tw) / 2f),
+                (int)(canvas.Y + canvas.Height / 2f),
+                UITheme.FontSizeNormal,
+                new Color(55, 60, 88, 255));
+
+            string modeLabel = _mode.ToString().ToUpper() + " EDITOR";
+            Raylib.DrawText(modeLabel,
+                (int)(canvas.X + 12), 10,
+                UITheme.FontSizeMedium, UITheme.LabelAccent);
+        }
     }
 
     private void DrawStatusBar()
@@ -329,21 +374,25 @@ public class EditorApp
         Raylib.DrawRectangle(0, barY, scrW, 24, UITheme.PanelBg);
         Raylib.DrawLine(0, barY, scrW, barY, UITheme.PanelBorder);
 
-        if (!string.IsNullOrEmpty(_statusMsg))
+        // Left: status message or canvas hover info
+        string left = !string.IsNullOrEmpty(_statusMsg)
+            ? _statusMsg
+            : (_mode == EditorMode.Map ? _mapCanvas.HoverInfo : "");
+
+        if (!string.IsNullOrEmpty(left))
         {
-            Raylib.DrawText(_statusMsg,
+            Raylib.DrawText(left,
                 8, barY + (24 - UITheme.FontSizeSmall) / 2,
                 UITheme.FontSizeSmall, UITheme.LabelAccent);
         }
 
-        // Right side: data dir
+        // Right: data dir
         string dirInfo = $"data: {_dataDir}";
         int dw = Raylib.MeasureText(dirInfo, UITheme.FontSizeSmall);
         Raylib.DrawText(dirInfo,
             scrW - dw - 8,
             barY + (24 - UITheme.FontSizeSmall) / 2,
-            UITheme.FontSizeSmall,
-            UITheme.LabelSecondary);
+            UITheme.FontSizeSmall, UITheme.LabelSecondary);
     }
 
     // ── File operations ───────────────────────────────────────────────────────
@@ -357,60 +406,77 @@ public class EditorApp
                 case EditorMode.Map:
                     DataSerializer.SaveMap(_map,
                         Path.Combine(_dataDir, "maps", $"{_map.Id}.map.json"));
-                    SetStatus($"Map '{_map.Name}' saved.");
+                    SetStatus($"✓ Map '{_map.Name}' saved ({_map.Tiles.Count} tiles).");
                     break;
                 case EditorMode.Weapon:
                     DataSerializer.SaveWeapon(_weapon,
                         Path.Combine(_dataDir, "weapons", $"{_weapon.Id}.weapon.json"));
-                    SetStatus($"Weapon '{_weapon.Name}' saved.");
+                    SetStatus($"✓ Weapon '{_weapon.Name}' saved.");
                     break;
                 case EditorMode.Enemy:
                     DataSerializer.SaveEnemy(_enemy,
                         Path.Combine(_dataDir, "enemies", $"{_enemy.Id}.enemy.json"));
-                    SetStatus($"Enemy '{_enemy.Name}' saved.");
+                    SetStatus($"✓ Enemy '{_enemy.Name}' saved.");
                     break;
             }
         }
-        catch (Exception ex) { SetStatus($"Error: {ex.Message}"); }
+        catch (Exception ex) { SetStatus($"✕ Error: {ex.Message}"); }
     }
 
     private void LoadCurrent()
     {
-        // Phase 2: open a file picker overlay. For now, load newest in data dir.
         try
         {
             switch (_mode)
             {
                 case EditorMode.Map:
                     var maps = DataSerializer.LoadAllMaps(Path.Combine(_dataDir, "maps"));
-                    if (maps.Count > 0) { _map = maps[^1]; RebuildSidePanel(); SetStatus($"Loaded map '{_map.Name}'."); }
-                    else SetStatus("No maps found.");
+                    if (maps.Count > 0)
+                    {
+                        _map = maps[^1];
+                        _mapCanvas.SetMap(_map);
+                        RebuildSidePanel();
+                        SetStatus($"✓ Loaded map '{_map.Name}'.");
+                    }
+                    else SetStatus("No maps found in data/maps/.");
                     break;
                 case EditorMode.Weapon:
                     var weapons = DataSerializer.LoadAllWeapons(Path.Combine(_dataDir, "weapons"));
-                    if (weapons.Count > 0) { _weapon = weapons[^1]; RebuildSidePanel(); SetStatus($"Loaded weapon '{_weapon.Name}'."); }
+                    if (weapons.Count > 0) { _weapon = weapons[^1]; RebuildSidePanel(); SetStatus($"✓ Loaded weapon '{_weapon.Name}'."); }
                     else SetStatus("No weapons found.");
                     break;
                 case EditorMode.Enemy:
                     var enemies = DataSerializer.LoadAllEnemies(Path.Combine(_dataDir, "enemies"));
-                    if (enemies.Count > 0) { _enemy = enemies[^1]; RebuildSidePanel(); SetStatus($"Loaded enemy '{_enemy.Name}'."); }
+                    if (enemies.Count > 0) { _enemy = enemies[^1]; RebuildSidePanel(); SetStatus($"✓ Loaded enemy '{_enemy.Name}'."); }
                     else SetStatus("No enemies found.");
                     break;
             }
         }
-        catch (Exception ex) { SetStatus($"Error: {ex.Message}"); }
+        catch (Exception ex) { SetStatus($"✕ Error: {ex.Message}"); }
     }
 
     private void NewCurrent()
     {
         switch (_mode)
         {
-            case EditorMode.Map:    _map    = DataSerializer.DefaultMap();    break;
+            case EditorMode.Map:
+                _map = DataSerializer.DefaultMap();
+                _mapCanvas.SetMap(_map);
+                break;
             case EditorMode.Weapon: _weapon = DataSerializer.DefaultWeapon(); break;
             case EditorMode.Enemy:  _enemy  = DataSerializer.DefaultEnemy();  break;
         }
         RebuildSidePanel();
-        SetStatus("New item created.");
+        SetStatus("✦ New item created.");
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private Rectangle CanvasRect()
+    {
+        int scrW = Raylib.GetScreenWidth();
+        int scrH = Raylib.GetScreenHeight();
+        return new Rectangle(PanelW + 2, 0, scrW - PanelW - 2, scrH - 24);
     }
 
     private void SetStatus(string msg)
