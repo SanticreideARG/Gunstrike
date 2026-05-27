@@ -2,6 +2,7 @@ using System.Numerics;
 using GunStrike.Data;
 using GunStrike.Editor.Map;
 using GunStrike.Editor.UI;
+using GunStrike.Editor.Enemy;
 using GunStrike.Editor.Weapon;
 using Raylib_cs;
 
@@ -33,6 +34,7 @@ public class EditorApp
     // ── Map canvas ────────────────────────────────────────────────────────────
     private MapCanvas     _mapCanvas     = null!;
     private WeaponPreview _weaponPreview = null!;
+    private EnemyPreview  _enemyPreview  = null!;
 
     // ── Status bar ────────────────────────────────────────────────────────────
     private string _statusMsg  = "Ready.";
@@ -56,6 +58,7 @@ public class EditorApp
 
         _mapCanvas     = new MapCanvas(_map);
         _weaponPreview = new WeaponPreview(_weapon);
+        _enemyPreview  = new EnemyPreview(_enemy);
         BuildPanels();
 
         while (!Raylib.WindowShouldClose())
@@ -350,21 +353,8 @@ public class EditorApp
         }
         else
         {
-            // Enemy editor — Phase 4 placeholder
-            Raylib.DrawRectangleRec(canvas, new Color(18, 20, 30, 255));
-
-            string hint = "Enemy preview — AI state visualizer · Phase 4";
-            int tw = Raylib.MeasureText(hint, UITheme.FontSizeNormal);
-            Raylib.DrawText(hint,
-                (int)(canvas.X + (canvas.Width - tw) / 2f),
-                (int)(canvas.Y + canvas.Height / 2f),
-                UITheme.FontSizeNormal,
-                new Color(55, 60, 88, 255));
-
-            string modeLabel = "ENEMY EDITOR";
-            Raylib.DrawText(modeLabel,
-                (int)(canvas.X + 12), 10,
-                UITheme.FontSizeMedium, UITheme.LabelAccent);
+            _enemyPreview.SetEnemy(_enemy);
+            _enemyPreview.Draw(canvas);
         }
     }
 
@@ -456,7 +446,13 @@ public class EditorApp
                     break;
                 case EditorMode.Enemy:
                     var enemies = DataSerializer.LoadAllEnemies(Path.Combine(_dataDir, "enemies"));
-                    if (enemies.Count > 0) { _enemy = enemies[^1]; RebuildSidePanel(); SetStatus($"✓ Loaded enemy '{_enemy.Name}'."); }
+                    if (enemies.Count > 0)
+                    {
+                        _enemy = enemies[^1];
+                        _enemyPreview.SetEnemy(_enemy);
+                        RebuildSidePanel();
+                        SetStatus($"✓ Loaded enemy '{_enemy.Name}'.");
+                    }
                     else SetStatus("No enemies found.");
                     break;
             }
@@ -473,7 +469,10 @@ public class EditorApp
                 _mapCanvas.SetMap(_map);
                 break;
             case EditorMode.Weapon: _weapon = DataSerializer.DefaultWeapon(); break;
-            case EditorMode.Enemy:  _enemy  = DataSerializer.DefaultEnemy();  break;
+            case EditorMode.Enemy:
+                _enemy = DataSerializer.DefaultEnemy();
+                _enemyPreview.SetEnemy(_enemy);
+                break;
         }
         RebuildSidePanel();
         SetStatus("✦ New item created.");
