@@ -26,6 +26,20 @@ public class PlayerEntity : IDisposable
     private float _aimAngle;   // radians from +X
     private bool  _facingRight = true;
 
+    // ── Reload animation ──────────────────────────────────────────────────────
+    public  bool  IsReloading   { get; private set; }
+    private float _reloadTimer;
+    private float _reloadStartAngle;   // aim angle when reload began
+    private float _reloadLowAngle;     // "weapon lowered" target angle
+    private float _reloadTargetAngle;  // current mouse aim (updated each frame during phase 3)
+
+    /// Duration in seconds — later read from equipped WeaponData.ReloadTime
+    private const float ReloadDuration = 2.0f;
+
+    /// Progress 0..1, exposed for HUD.
+    public float ReloadProgress =>
+        IsReloading ? Math.Clamp(_reloadTimer / ReloadDuration, 0f, 1f) : 0f;
+
     public bool    IsRagdoll     { get; private set; }
 
     /// <summary>Torso center in pixels (world space).</summary>
@@ -78,12 +92,19 @@ public class PlayerEntity : IDisposable
     {
         if (input.ToggleRagdoll) ToggleRagdoll();
 
+        // Start reload: only when active and not already reloading
+        if (input.Reload && !IsRagdoll && !IsReloading)
+            StartReload();
+
         UpdateGroundDetection();
 
         if (!IsRagdoll)
             UpdateActive(input);
 
-        UpdateAim(input);
+        if (IsReloading)
+            UpdateReload(dt, input);   // drives _aimAngle; also tracks mouse for phase 3
+        else
+            UpdateAim(input);          // normal mouse tracking
     }
 
     private void UpdateActive(InputState input)
@@ -132,6 +153,86 @@ public class PlayerEntity : IDisposable
         body.Rotation        = 0f;
     }
 
+    // ── Reload animation ──────────────────────────────────────────────────────
+
+    private void StartReload()
+    {
+        IsReloading        = true;
+        _reloadTimer       = 0f;
+        _reloadStartAngle  = _aimAngle;
+        _reloadTargetAngle = _aimAngle;
+
+        // "Lowered" position: arm drops forward-and-down relative to facing
+        bool facingRight = _aimAngle is > -MathF.PI / 2f and < MathF.PI / 2f;
+        _reloadLowAngle  = facingRight
+            ? MathF.PI * 0.44f    // ≈ 79° — barrel points down-forward (right)
+            : MathF.PI * 0.56f;   // ≈ 101° — mirrored for left-facing
+    }
+
+    /// <summary>
+    /// Three-phase arm animation:
+    ///   0–30 %  → lower weapon (aim → low angle, smooth ease-out)
+    ///  30–70 %  → hold low with a gentle wobble (magazine swap)
+    ///  70–100 % → raise weapon back (low angle → current mouse aim, smooth ease-in)
+    /// </summary>
+    private void UpdateReload(float dt, InputState input)
+    {
+        _reloadTimer += dt;
+        float t = Math.Clamp(_reloadTimer / ReloadDuration, 0f, 1f);
+
+        // Keep tracking the mouse so the weapon returns to the correct position
+        if (input.AimDirection.LengthSquared() > 0.001f)
+            _reloadTargetAngle = MathF.Atan2(input.AimDirection.Y, input.AimDirection.X);
+
+        const float p1End = 0.30f;   // lower phase ends
+        const float p2End = 0.68f;   // hold phase ends
+        // phase 3 runs p2End → 1.0
+
+        if (t < p1End)
+        {
+            // Phase 1 — lower: smoothstep ease-out
+            float p = Smoothstep(t / p1End);
+            _aimAngle = LerpAngle(_reloadStartAngle, _reloadLowAngle, p);
+        }
+        else if (t < p2End)
+        {
+            // Phase 2 — hold & wobble (magazine eject / insert feel)
+            float localT  = (t - p1End) / (p2End - p1End); // 0..1 within this phase
+            float wobble  = MathF.Sin(localT * MathF.PI * 3f) * 0.07f;  // 1.5 oscillations
+            _aimAngle = _reloadLowAngle + wobble;
+        }
+        else
+        {
+            // Phase 3 — raise: smoothstep ease-in
+            float p = Smoothstep((t - p2End) / (1f - p2End));
+            _aimAngle = LerpAngle(_reloadLowAngle, _reloadTargetAngle, p);
+        }
+
+        // Finished
+        if (_reloadTimer >= ReloadDuration)
+        {
+            IsReloading = false;
+            _aimAngle   = _reloadTargetAngle;
+        }
+    }
+
+    private void CancelReload()
+    {
+        if (!IsReloading) return;
+        IsReloading = false;
+        _aimAngle   = _reloadTargetAngle;   // snap to wherever mouse was
+    }
+
+    // Easing helpers ─────────────────────────────────────────────────────────
+    private static float Smoothstep(float t) => t * t * (3f - 2f * t);
+
+    private static float LerpAngle(float a, float b, float t)
+    {
+        // Lerp through the shortest arc (handles 0/2π wraparound)
+        float diff = ((b - a + MathF.PI * 3f) % (MathF.PI * 2f)) - MathF.PI;
+        return a + diff * t;
+    }
+
     private void UpdateAim(InputState input)
     {
         // AimDirection is pre-computed in world space by GameLoop
@@ -156,6 +257,7 @@ public class PlayerEntity : IDisposable
 
     private void SetRagdollMode()
     {
+        CancelReload();   // abort any in-progress reload
         foreach (var j in _joints) j.LimitEnabled = false;
 
         foreach (var (_, p) in _parts)

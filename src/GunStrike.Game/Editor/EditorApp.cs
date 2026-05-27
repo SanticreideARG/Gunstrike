@@ -2,6 +2,7 @@ using System.Numerics;
 using GunStrike.Data;
 using GunStrike.Editor.Map;
 using GunStrike.Editor.UI;
+using GunStrike.Editor.Weapon;
 using Raylib_cs;
 
 namespace GunStrike.Editor;
@@ -30,7 +31,8 @@ public class EditorApp
     private Panel _modeBar   = null!;
 
     // ── Map canvas ────────────────────────────────────────────────────────────
-    private MapCanvas _mapCanvas = null!;
+    private MapCanvas     _mapCanvas     = null!;
+    private WeaponPreview _weaponPreview = null!;
 
     // ── Status bar ────────────────────────────────────────────────────────────
     private string _statusMsg  = "Ready.";
@@ -52,7 +54,8 @@ public class EditorApp
         Raylib.InitWindow(WinW, WinH, $"GunStrike Editor — {_mode}");
         Raylib.SetTargetFPS(60);
 
-        _mapCanvas = new MapCanvas(_map);
+        _mapCanvas     = new MapCanvas(_map);
+        _weaponPreview = new WeaponPreview(_weapon);
         BuildPanels();
 
         while (!Raylib.WindowShouldClose())
@@ -340,17 +343,17 @@ public class EditorApp
                 UITheme.FontSizeSmall,
                 new Color(55, 60, 85, 255));
         }
+        else if (_mode == EditorMode.Weapon)
+        {
+            _weaponPreview.SetWeapon(_weapon);
+            _weaponPreview.Draw(canvas);
+        }
         else
         {
-            // Placeholder for Weapon / Enemy editors
+            // Enemy editor — Phase 4 placeholder
             Raylib.DrawRectangleRec(canvas, new Color(18, 20, 30, 255));
 
-            string hint = _mode switch
-            {
-                EditorMode.Weapon => "Weapon preview — sprite + stat display · Phase 3",
-                EditorMode.Enemy  => "Enemy preview — AI state visualizer · Phase 4",
-                _                 => ""
-            };
+            string hint = "Enemy preview — AI state visualizer · Phase 4";
             int tw = Raylib.MeasureText(hint, UITheme.FontSizeNormal);
             Raylib.DrawText(hint,
                 (int)(canvas.X + (canvas.Width - tw) / 2f),
@@ -358,7 +361,7 @@ public class EditorApp
                 UITheme.FontSizeNormal,
                 new Color(55, 60, 88, 255));
 
-            string modeLabel = _mode.ToString().ToUpper() + " EDITOR";
+            string modeLabel = "ENEMY EDITOR";
             Raylib.DrawText(modeLabel,
                 (int)(canvas.X + 12), 10,
                 UITheme.FontSizeMedium, UITheme.LabelAccent);
@@ -442,7 +445,13 @@ public class EditorApp
                     break;
                 case EditorMode.Weapon:
                     var weapons = DataSerializer.LoadAllWeapons(Path.Combine(_dataDir, "weapons"));
-                    if (weapons.Count > 0) { _weapon = weapons[^1]; RebuildSidePanel(); SetStatus($"✓ Loaded weapon '{_weapon.Name}'."); }
+                    if (weapons.Count > 0)
+                    {
+                        _weapon = weapons[^1];
+                        _weaponPreview.SetWeapon(_weapon);
+                        RebuildSidePanel();
+                        SetStatus($"✓ Loaded weapon '{_weapon.Name}'.");
+                    }
                     else SetStatus("No weapons found.");
                     break;
                 case EditorMode.Enemy:

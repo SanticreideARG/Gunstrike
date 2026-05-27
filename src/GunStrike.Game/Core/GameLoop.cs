@@ -86,7 +86,7 @@ public class GameLoop
         _camera.Follow(_player.PixelPosition);
 
         // ── Shoot ────────────────────────────────────────────────────────────────
-        if (input.Shoot && !_player.IsRagdoll)
+        if (input.Shoot && !_player.IsRagdoll && !_player.IsReloading)
             _projectiles.Shoot(_player.MuzzleMeters, aimDirNorm);
     }
 
@@ -132,8 +132,34 @@ public class GameLoop
         Raylib.DrawText($"Proyectiles: {_projectiles.ActiveCount}",
                         10, 60, 14, new Color(200, 200, 200, 200));
 
-        Raylib.DrawText(
-            "A/D: mover  |  SPACE: saltar  |  LMB: disparar  |  R: ragdoll",
+        // ── Reload bar ───────────────────────────────────────────────────────
+        if (_player.IsReloading)
+        {
+            const int barW = 220, barH = 10;
+            int bx = (GameConstants.ScreenWidth  - barW) / 2;
+            int by = GameConstants.ScreenHeight  - 56;
+
+            // Label
+            string label = "RECARGANDO";
+            int lw = Raylib.MeasureText(label, 15);
+            Raylib.DrawText(label,
+                (GameConstants.ScreenWidth - lw) / 2, by - 22,
+                15, Color.Yellow);
+
+            // Track
+            Raylib.DrawRectangle(bx, by, barW, barH, new Color(40, 40, 40, 210));
+            // Fill
+            int fillW = (int)(barW * _player.ReloadProgress);
+            Raylib.DrawRectangle(bx, by, fillW, barH, Color.Yellow);
+            // Border
+            Raylib.DrawRectangleLines(bx, by, barW, barH, new Color(200, 200, 200, 180));
+        }
+
+        // Control hints
+        string hint = _player.IsReloading
+            ? "Recargando…  (T: ragdoll)"
+            : "A/D: mover  |  SPACE: saltar  |  LMB: disparar  |  R: recargar  |  T: ragdoll";
+        Raylib.DrawText(hint,
             10, GameConstants.ScreenHeight - 22, 13, new Color(200, 200, 200, 180));
     }
 
